@@ -112,7 +112,8 @@ function App() {
     const url = "https://v1.nocodeapi.com/diauto/google_sheets/SBCZkxAzjydRFoDp?tabId=Dados";
 
     const headers = ["Evento", "Nome", "Telefone", "Presente", "Convidado por"];
-    const linhas = convidados.map(c => [
+
+    const dadosConvidados = convidados.map(c => [
       evento.trim(),
       c.nome,
       c.telefone,
@@ -128,7 +129,7 @@ function App() {
       "Visitante"
     ]);
 
-    const corpo = [headers, ...linhas, ...linhasNaoConvidados];
+    const corpo = [headers, ...dadosConvidados, ...dadosNaoListados];
 
     fetch(url, {
       method: "POST",
