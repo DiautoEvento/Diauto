@@ -1,14 +1,38 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 function App() {
-  const [convidados, setConvidados] = useState([]);
-  const [naoConvidados, setNaoConvidados] = useState([]);
+  const [convidados, setConvidados] = useState(() => {
+    const dadosSalvos = localStorage.getItem("convidados");
+    return dadosSalvos ? JSON.parse(dadosSalvos) : [];
+  });
+
+  const [naoConvidados, setNaoConvidados] = useState(() => {
+    const dadosSalvos = localStorage.getItem("naoConvidados");
+    return dadosSalvos ? JSON.parse(dadosSalvos) : [];
+  });
+
   const [nomeNovo, setNomeNovo] = useState("");
   const [telefoneNovo, setTelefoneNovo] = useState("");
   const [editandoIndex, setEditandoIndex] = useState(null);
-  const [evento, setEvento] = useState("");
+
+  const [evento, setEvento] = useState(() => {
+    return localStorage.getItem("evento") || "";
+  });
+
+  // Salva no localStorage automaticamente quando os estados mudarem
+  useEffect(() => {
+    localStorage.setItem("convidados", JSON.stringify(convidados));
+  }, [convidados]);
+
+  useEffect(() => {
+    localStorage.setItem("naoConvidados", JSON.stringify(naoConvidados));
+  }, [naoConvidados]);
+
+  useEffect(() => {
+    localStorage.setItem("evento", evento);
+  }, [evento]);
 
   const marcarPresenca = (index) => {
     const novaLista = [...convidados];
@@ -18,18 +42,15 @@ function App() {
 
   const adicionarOuEditarNaoConvidado = () => {
     if (nomeNovo.trim() === "" || telefoneNovo.trim() === "") return;
-
     const novo = { nome: nomeNovo.trim(), telefone: telefoneNovo.trim() };
-
     if (editandoIndex !== null) {
-      const novaLista = [...naoConvidados];
-      novaLista[editandoIndex] = novo;
-      setNaoConvidados(novaLista);
+      const lista = [...naoConvidados];
+      lista[editandoIndex] = novo;
+      setNaoConvidados(lista);
       setEditandoIndex(null);
     } else {
       setNaoConvidados([...naoConvidados, novo]);
     }
-
     setNomeNovo("");
     setTelefoneNovo("");
   };
@@ -44,15 +65,16 @@ function App() {
   const removerNaoConvidado = (index) => {
     const novaLista = naoConvidados.filter((_, i) => i !== index);
     setNaoConvidados(novaLista);
-    setEditandoIndex(null);
-    setNomeNovo("");
-    setTelefoneNovo("");
+    if (editandoIndex === index) {
+      setEditandoIndex(null);
+      setNomeNovo("");
+      setTelefoneNovo("");
+    }
   };
 
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
       const data = new Uint8Array(e.target.result);
@@ -82,123 +104,81 @@ function App() {
 
       setConvidados(dadosImportados);
     };
-
     reader.readAsArrayBuffer(file);
   };
 
   const salvarNoGoogleSheets = () => {
-    if (!evento.trim()) {
-      alert("Insira o nome do evento");
-      return;
-    }
-
-    const url = "https://script.google.com/macros/s/AKfycbyDsfEyAajSOLti4U9mllB7DhB7EkA56wmsWn3uCYhTvgzGDKhZMED8rXqo_TFF83o/exec"; // <-- SUBSTITUA PELO SEU LINK
-
+    if (!evento.trim()) return alert("Insira o nome do evento");
+    const url = "https://script.google.com/macros/s/AKfycbyDsfEyAajSOLti4U9mllB7DhB7EkA56wmsWn3uCYhTvgzGDKhZMED8rXqo_TFF83o/exec";
     const payload = {
       evento: evento.trim(),
       presentes: convidados.filter(c => c.presente),
       faltaram: convidados.filter(c => !c.presente),
-      naoListados: naoConvidados,
+      naoListados: naoConvidados
     };
-
     fetch(url, {
       method: "POST",
-      mode: "no-cors", // <-- ESSENCIAL para não bloquear a requisição
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" }
     })
-      .then(() => alert("Salvo com sucesso no Google Sheets!"))
-      .catch((err) => alert("Erro ao salvar: " + err));
+      .then(res => res.text())
+      .then(alert)
+      .catch(err => alert("Erro ao salvar: " + err));
   };
 
   const gerarRelatorio = () => {
     const presentes = convidados.filter(c => c.presente);
     const faltaram = convidados.filter(c => !c.presente);
-    const naoListados = naoConvidados;
+
+    const sheetPresentes = XLSX.utils.json_to_sheet(presentes);
+    const sheetFaltaram = XLSX.utils.json_to_sheet(faltaram);
+    const sheetNaoListados = XLSX.utils.json_to_sheet(naoConvidados);
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(presentes), "Presentes");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(faltaram), "Faltaram");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(naoListados), "NaoListados");
+    XLSX.utils.book_append_sheet(wb, sheetPresentes, "Presentes");
+    XLSX.utils.book_append_sheet(wb, sheetFaltaram, "Faltaram");
+    XLSX.utils.book_append_sheet(wb, sheetNaoListados, "NaoListados");
 
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([wbout], { type: "application/octet-stream" }), "relatorio_final.xlsx");
+    const blob = new Blob([wbout], { type: "application/octet-stream" });
+    saveAs(blob, "relatorio_final.xlsx");
   };
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-2xl mx-auto bg-white shadow-xl rounded-2xl p-6">
-        <h1 className="text-2xl font-bold text-center mb-4 text-red-600">
-          Check-in do Evento
-        </h1>
+        <h1 className="text-2xl font-bold text-center mb-4 text-red-600">Check-in do Evento</h1>
 
         <div className="mb-4">
-          <label className="block mb-1 font-semibold text-gray-700">
-            Nome do Evento:
-          </label>
-          <input
-            type="text"
-            value={evento}
-            onChange={(e) => setEvento(e.target.value)}
-            placeholder="Ex: Lançamento Tera"
-            className="border rounded p-2 w-full mb-4"
-          />
+          <label className="block mb-1 font-semibold text-gray-700">Nome do Evento:</label>
+          <input type="text" value={evento} onChange={(e) => setEvento(e.target.value)} placeholder="Ex: Lançamento Tera" className="border rounded p-2 w-full mb-4" />
         </div>
 
         <div className="mb-4">
-          <label className="block mb-1 font-semibold text-gray-700">
-            Importar Planilha Excel (.xlsx):
-          </label>
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={handleImport}
-            className="border rounded p-2 w-full"
-          />
+          <label className="block mb-1 font-semibold text-gray-700">Importar Planilha Excel (.xlsx):</label>
+          <input type="file" accept=".xlsx" onChange={handleImport} className="border rounded p-2 w-full" />
         </div>
 
         <p className="text-gray-700 mb-2">Confirmados: {convidados.length}</p>
         <p className="text-green-600 mb-4">Presentes: {convidados.filter(c => c.presente).length}</p>
 
         <div className="flex gap-2 mb-6">
-          <button
-            onClick={gerarRelatorio}
-            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-          >
-            Gerar Relatório Final
-          </button>
-          <button
-            onClick={salvarNoGoogleSheets}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
-            Salvar no Google Sheets
-          </button>
+          <button onClick={gerarRelatorio} className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Gerar Relatório Final</button>
+          <button onClick={salvarNoGoogleSheets} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Salvar no Google Sheets</button>
         </div>
 
         <ul className="space-y-2 mb-6">
           {convidados.map((convidado, index) => (
-            <li
-              key={index}
-              className="flex justify-between items-center bg-gray-50 p-2 rounded shadow"
-            >
+            <li key={index} className="flex justify-between items-center bg-gray-50 p-2 rounded shadow">
               <div>
                 <p className="font-semibold">{convidado.nome}</p>
                 <p className="text-sm text-gray-500">{convidado.telefone}</p>
                 {convidado.convidadoPor && (
-                  <p className="text-sm text-gray-400 italic">
-                    Convidado por: {convidado.convidadoPor}
-                  </p>
+                  <p className="text-sm text-gray-400 italic">Convidado por: {convidado.convidadoPor}</p>
                 )}
               </div>
               {!convidado.presente && (
-                <button
-                  onClick={() => marcarPresenca(index)}
-                  className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
-                >
-                  ✔ Presente
-                </button>
+                <button onClick={() => marcarPresenca(index)} className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">✔ Presente</button>
               )}
             </li>
           ))}
@@ -207,46 +187,20 @@ function App() {
         <div className="border-t pt-4">
           <h2 className="text-lg font-semibold mb-2">Visitantes não listados</h2>
           <div className="flex flex-col gap-2 mb-2">
-            <input
-              type="text"
-              value={nomeNovo}
-              onChange={(e) => setNomeNovo(e.target.value)}
-              placeholder="Nome completo"
-              className="border rounded px-2 py-1"
-            />
-            <input
-              type="text"
-              value={telefoneNovo}
-              onChange={(e) => setTelefoneNovo(e.target.value)}
-              placeholder="Telefone"
-              className="border rounded px-2 py-1"
-            />
-            <button
-              onClick={adicionarOuEditarNaoConvidado}
-              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
-            >
+            <input type="text" value={nomeNovo} onChange={(e) => setNomeNovo(e.target.value)} placeholder="Nome completo" className="border rounded px-2 py-1" />
+            <input type="text" value={telefoneNovo} onChange={(e) => setTelefoneNovo(e.target.value)} placeholder="Telefone" className="border rounded px-2 py-1" />
+            <button onClick={adicionarOuEditarNaoConvidado} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
               {editandoIndex !== null ? "Salvar" : "Adicionar"}
             </button>
           </div>
-
           {naoConvidados.length > 0 && (
             <ul className="list-disc list-inside text-sm text-gray-700">
               {naoConvidados.map((n, i) => (
                 <li key={i} className="flex justify-between items-center">
                   <span>{n.nome} - {n.telefone}</span>
                   <div className="space-x-2">
-                    <button
-                      onClick={() => editarNaoConvidado(i)}
-                      className="text-sm text-yellow-600 hover:underline"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => removerNaoConvidado(i)}
-                      className="text-sm text-red-600 hover:underline"
-                    >
-                      Remover
-                    </button>
+                    <button onClick={() => editarNaoConvidado(i)} className="text-sm text-yellow-600 hover:underline">Editar</button>
+                    <button onClick={() => removerNaoConvidado(i)} className="text-sm text-red-600 hover:underline">Remover</button>
                   </div>
                 </li>
               ))}
