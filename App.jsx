@@ -92,7 +92,7 @@ function App() {
       return;
     }
 
-    const url = "https://script.google.com/macros/s/AKfycbwQxGkUmcNWuffyx940ZJ9B728GU7POxKWvqqJBKfe-9ehfDfx4LTi-Yvj_5ni_OtOU/exec"; // <-- SUBSTITUA PELO SEU LINK
+    const url = "https://script.google.com/macros/s/AKfycbyDsfEyAajSOLti4U9mllB7DhB7EkA56wmsWn3uCYhTvgzGDKhZMED8rXqo_TFF83o/exec"; // <-- SUBSTITUA PELO SEU LINK
 
     const payload = {
       evento: evento.trim(),
