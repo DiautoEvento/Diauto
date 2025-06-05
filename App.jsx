@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
@@ -19,15 +19,15 @@ function App() {
   const adicionarOuEditarNaoConvidado = () => {
     if (nomeNovo.trim() === "" || telefoneNovo.trim() === "") return;
 
-    const novoRegistro = { nome: nomeNovo.trim(), telefone: telefoneNovo.trim() };
+    const novo = { nome: nomeNovo.trim(), telefone: telefoneNovo.trim() };
 
     if (editandoIndex !== null) {
       const novaLista = [...naoConvidados];
-      novaLista[editandoIndex] = novoRegistro;
+      novaLista[editandoIndex] = novo;
       setNaoConvidados(novaLista);
       setEditandoIndex(null);
     } else {
-      setNaoConvidados([...naoConvidados, novoRegistro]);
+      setNaoConvidados([...naoConvidados, novo]);
     }
 
     setNomeNovo("");
@@ -44,11 +44,9 @@ function App() {
   const removerNaoConvidado = (index) => {
     const novaLista = naoConvidados.filter((_, i) => i !== index);
     setNaoConvidados(novaLista);
-    if (editandoIndex === index) {
-      setEditandoIndex(null);
-      setNomeNovo("");
-      setTelefoneNovo("");
-    }
+    setEditandoIndex(null);
+    setNomeNovo("");
+    setTelefoneNovo("");
   };
 
   const handleImport = (event) => {
@@ -59,7 +57,6 @@ function App() {
     reader.onload = (e) => {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
-
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
@@ -85,50 +82,50 @@ function App() {
 
       setConvidados(dadosImportados);
     };
+
     reader.readAsArrayBuffer(file);
   };
 
   const salvarNoGoogleSheets = () => {
-    if (!evento.trim()) return alert("Insira o nome do evento");
-    const url = "https://script.google.com/macros/s/AKfycbwQxGkUmcNWuffyx940ZJ9B728GU7POxKWvqqJBKfe-9ehfDfx4LTi-Yvj_5ni_OtOU/exec";
+    if (!evento.trim()) {
+      alert("Insira o nome do evento");
+      return;
+    }
+
+    const url = "https://script.google.com/macros/s/AKfycbwQxGkUmcNWuffyx940ZJ9B728GU7POxKWvqqJBKfe-9ehfDfx4LTi-Yvj_5ni_OtOU/exec"; // <-- SUBSTITUA PELO SEU LINK
 
     const payload = {
       evento: evento.trim(),
       presentes: convidados.filter(c => c.presente),
       faltaram: convidados.filter(c => !c.presente),
-      naoListados: naoConvidados
+      naoListados: naoConvidados,
     };
 
     fetch(url, {
       method: "POST",
+      mode: "no-cors", // <-- ESSENCIAL para não bloquear a requisição
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
-      headers: { "Content-Type": "application/json" }
     })
-      .then(res => res.text())
-      .then(alert)
-      .catch(err => alert("Erro ao salvar: " + err));
+      .then(() => alert("Salvo com sucesso no Google Sheets!"))
+      .catch((err) => alert("Erro ao salvar: " + err));
   };
 
   const gerarRelatorio = () => {
     const presentes = convidados.filter(c => c.presente);
     const faltaram = convidados.filter(c => !c.presente);
-
-    const sheetPresentes = XLSX.utils.json_to_sheet(presentes);
-    const sheetFaltaram = XLSX.utils.json_to_sheet(faltaram);
-    const sheetNaoListados = XLSX.utils.json_to_sheet(naoConvidados);
+    const naoListados = naoConvidados;
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheetPresentes, "Presentes");
-    XLSX.utils.book_append_sheet(wb, sheetFaltaram, "Faltaram");
-    XLSX.utils.book_append_sheet(wb, sheetNaoListados, "NaoListados");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(presentes), "Presentes");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(faltaram), "Faltaram");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(naoListados), "NaoListados");
 
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([wbout], { type: "application/octet-stream" });
-    saveAs(blob, "relatorio_final.xlsx");
+    saveAs(new Blob([wbout], { type: "application/octet-stream" }), "relatorio_final.xlsx");
   };
-
-  const totalConfirmados = convidados.length;
-  const totalPresentes = convidados.filter((c) => c.presente).length;
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -145,7 +142,7 @@ function App() {
             type="text"
             value={evento}
             onChange={(e) => setEvento(e.target.value)}
-            placeholder="Ex: Lançamento Polo 2025"
+            placeholder="Ex: Lançamento Tera"
             className="border rounded p-2 w-full mb-4"
           />
         </div>
@@ -162,8 +159,8 @@ function App() {
           />
         </div>
 
-        <p className="text-gray-700 mb-2">Confirmados: {totalConfirmados}</p>
-        <p className="text-green-600 mb-4">Presentes: {totalPresentes}</p>
+        <p className="text-gray-700 mb-2">Confirmados: {convidados.length}</p>
+        <p className="text-green-600 mb-4">Presentes: {convidados.filter(c => c.presente).length}</p>
 
         <div className="flex gap-2 mb-6">
           <button
@@ -231,6 +228,7 @@ function App() {
               {editandoIndex !== null ? "Salvar" : "Adicionar"}
             </button>
           </div>
+
           {naoConvidados.length > 0 && (
             <ul className="list-disc list-inside text-sm text-gray-700">
               {naoConvidados.map((n, i) => (
