@@ -21,6 +21,7 @@ function App() {
     return localStorage.getItem("evento") || "";
   });
 
+  // Salva os dados localmente para manter após atualização
   useEffect(() => {
     localStorage.setItem("convidados", JSON.stringify(convidados));
   }, [convidados]);
@@ -111,30 +112,28 @@ function App() {
 
     const url = "https://v1.nocodeapi.com/diauto/google_sheets/SBCZkxAzjydRFoDp?tabId=Dados";
 
-    const headers = ["Evento", "Nome", "Telefone", "Presente", "Convidado por"];
-
-    const dadosConvidados = convidados.map(c => [
-      evento.trim(),
-      c.nome,
-      c.telefone,
-      c.presente ? "Sim" : "Não",
-      c.convidadoPor || ""
-    ]);
-
-    const linhasNaoConvidados = naoConvidados.map(n => [
-      evento.trim(),
-      n.nome,
-      n.telefone,
-      "Sim",
-      "Visitante"
-    ]);
-
-    const corpo = [headers, ...dadosConvidados, ...dadosNaoListados];
+    const dadosCombinados = [
+      ["Evento", "Nome", "Telefone", "Presente", "Convidado por"],
+      ...convidados.map(c => [
+        evento.trim(),
+        c.nome,
+        c.telefone,
+        c.presente ? "Sim" : "Não",
+        c.convidadoPor || ""
+      ]),
+      ...naoConvidados.map(n => [
+        evento.trim(),
+        n.nome,
+        n.telefone,
+        "Sim",
+        "Visitante"
+      ])
+    ];
 
     fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ values: corpo })
+      body: JSON.stringify({ values: dadosCombinados })
     })
       .then(res => res.json())
       .then(res => {
