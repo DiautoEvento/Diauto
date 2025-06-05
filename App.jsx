@@ -106,50 +106,44 @@ function App() {
     reader.readAsArrayBuffer(file);
   };
 
-  // 🔁 NOVA FUNÇÃO SALVAR NO GOOGLE SHEETS (NOCODEAPI)
   const salvarNoGoogleSheets = () => {
     if (!evento.trim()) return alert("Insira o nome do evento");
 
     const url = "https://v1.nocodeapi.com/diauto/google_sheets/SBCZkxAzjydRFoDp?tabId=Dados";
 
-    const payload = [
-      ["Evento:", evento],
-      [],
-      ["Presentes"],
-      ["Nome", "Telefone", "Convidado Por"],
-      ...convidados
-        .filter(c => c.presente)
-        .map(c => [c.nome, c.telefone, c.convidadoPor || ""]),
-      [],
-      ["Faltaram"],
-      ["Nome", "Telefone", "Convidado Por"],
-      ...convidados
-        .filter(c => !c.presente)
-        .map(c => [c.nome, c.telefone, c.convidadoPor || ""]),
-      [],
-      ["Não listados"],
-      ["Nome", "Telefone"],
-      ...naoConvidados.map(n => [n.nome, n.telefone])
-    ];
+    const headers = ["Evento", "Nome", "Telefone", "Presente", "Convidado por"];
+    const linhas = convidados.map(c => [
+      evento.trim(),
+      c.nome,
+      c.telefone,
+      c.presente ? "Sim" : "Não",
+      c.convidadoPor || ""
+    ]);
+
+    const linhasNaoConvidados = naoConvidados.map(n => [
+      evento.trim(),
+      n.nome,
+      n.telefone,
+      "Sim",
+      "Visitante"
+    ]);
+
+    const corpo = [headers, ...linhas, ...linhasNaoConvidados];
 
     fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ data: payload })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values: corpo })
     })
       .then(res => res.json())
-      .then(data => {
-        if (data.message) {
-          alert("Salvo com sucesso no Google Sheets!");
+      .then(res => {
+        if (res.error) {
+          alert("Erro ao salvar: " + res.info);
         } else {
-          alert("Erro ao salvar: " + JSON.stringify(data));
+          alert("Salvo com sucesso no Google Sheets!");
         }
       })
-      .catch(err => {
-        alert("Erro de conexão com a API: " + err.message);
-      });
+      .catch(err => alert("Erro de rede: " + err.message));
   };
 
   const gerarRelatorio = () => {
