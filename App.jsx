@@ -21,7 +21,6 @@ function App() {
     return localStorage.getItem("evento") || "";
   });
 
-  // Salva no localStorage automaticamente quando os estados mudarem
   useEffect(() => {
     localStorage.setItem("convidados", JSON.stringify(convidados));
   }, [convidados]);
@@ -107,23 +106,50 @@ function App() {
     reader.readAsArrayBuffer(file);
   };
 
+  // 🔁 NOVA FUNÇÃO SALVAR NO GOOGLE SHEETS (NOCODEAPI)
   const salvarNoGoogleSheets = () => {
     if (!evento.trim()) return alert("Insira o nome do evento");
-    const url = "https://script.google.com/macros/s/AKfycbyDsfEyAajSOLti4U9mllB7DhB7EkA56wmsWn3uCYhTvgzGDKhZMED8rXqo_TFF83o/exec";
-    const payload = {
-      evento: evento.trim(),
-      presentes: convidados.filter(c => c.presente),
-      faltaram: convidados.filter(c => !c.presente),
-      naoListados: naoConvidados
-    };
+
+    const url = "https://v1.nocodeapi.com/diauto/google_sheets/SBCZkxAzjydRFoDp?tabId=Dados";
+
+    const payload = [
+      ["Evento:", evento],
+      [],
+      ["Presentes"],
+      ["Nome", "Telefone", "Convidado Por"],
+      ...convidados
+        .filter(c => c.presente)
+        .map(c => [c.nome, c.telefone, c.convidadoPor || ""]),
+      [],
+      ["Faltaram"],
+      ["Nome", "Telefone", "Convidado Por"],
+      ...convidados
+        .filter(c => !c.presente)
+        .map(c => [c.nome, c.telefone, c.convidadoPor || ""]),
+      [],
+      ["Não listados"],
+      ["Nome", "Telefone"],
+      ...naoConvidados.map(n => [n.nome, n.telefone])
+    ];
+
     fetch(url, {
       method: "POST",
-      body: JSON.stringify(payload),
-      headers: { "Content-Type": "application/json" }
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ data: payload })
     })
-      .then(res => res.text())
-      .then(alert)
-      .catch(err => alert("Erro ao salvar: " + err));
+      .then(res => res.json())
+      .then(data => {
+        if (data.message) {
+          alert("Salvo com sucesso no Google Sheets!");
+        } else {
+          alert("Erro ao salvar: " + JSON.stringify(data));
+        }
+      })
+      .catch(err => {
+        alert("Erro de conexão com a API: " + err.message);
+      });
   };
 
   const gerarRelatorio = () => {
